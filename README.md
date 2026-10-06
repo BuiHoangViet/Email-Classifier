@@ -1,201 +1,232 @@
-# 🛡️ Vietnamese Spam Classifier
+# 🛡️ Email Classifier — Phân loại thư rác tiếng Việt & Trợ lý Email AI
 
-Ứng dụng phân loại thư rác / tin nhắn tiếng Việt với **hai engine**:
-- **Naive Bayes** — chạy hoàn toàn offline, không cần API key
-- **Gemini LLM (LangChain)** — dùng Google Gemini, hiểu ngữ cảnh sâu hơn
+![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B?logo=streamlit&logoColor=white)
+![LangChain](https://img.shields.io/badge/LangChain-Gemini-1C3C3C?logo=langchain&logoColor=white)
+![Accuracy](https://img.shields.io/badge/Naive%20Bayes-94.4%25%20accuracy-2E7D32)
+
+Ứng dụng web giúp **phát hiện tin nhắn / email rác (spam) tiếng Việt** và **trợ lý AI soạn & gửi email tự động** chỉ bằng một câu chat.
+
+> 💬 *"Soạn mail mời họp dự án lúc 9h sáng thứ Hai gửi tới sep@congty.com"*
+> → AI tự viết nội dung, kiểm tra xem thư có bị đánh dấu spam không, rồi gửi đi.
+
+---
+
+## ✨ Tính năng
+
+### 1. 🔍 Phân loại Spam / Ham
+| Engine | Đặc điểm |
+|---|---|
+| **Naive Bayes** (tự cài đặt từ đầu) | Chạy **offline**, không cần API key, nhanh. Độ chính xác **94.44%** trên tập test. Hiển thị **xác suất spam**. |
+| **Gemini LLM** (qua LangChain) | Hiểu ngữ cảnh sâu hơn, phát hiện lừa đảo tinh vi. Cần Google API Key. |
+
+- Nhập nội dung trực tiếp hoặc **tải file `.txt`, `.pdf`, `.docx`**
+- Tự động retry khi Gemini báo lỗi giới hạn quota (429)
+
+### 2. 🤖 Trợ lý Email AI (AI Agent)
+- **Chat bằng tiếng Việt** để nhờ gợi ý tin nhắn hoặc soạn email
+- Khi có yêu cầu gửi, Agent tự động:
+  1. Soạn tiêu đề + nội dung lịch sự, đúng mục đích
+  2. **Kiểm tra spam** bằng model Naive Bayes — nếu bị đánh giá là spam thì tự viết lại
+  3. **Gửi email** qua SMTP (Gmail, Outlook, ...)
+- Nhớ ngữ cảnh hội thoại: *"sửa lại ngắn hơn rồi gửi thêm cho b@congty.com"*
+- Chế độ **"Xác nhận trước khi gửi"**: xem & chỉnh bản nháp rồi mới bấm Gửi
+- An toàn: không tự bịa địa chỉ email, tối đa 10 người nhận/lần, chặn gửi trùng
+
+---
+
+## 🧠 Cách hoạt động
+
+```mermaid
+flowchart LR
+    U[👤 Người dùng chat] --> A[🤖 Gemini Agent]
+    A -->|tool: check_spam| NB[📊 Naive Bayes]
+    NB -->|spam? viết lại| A
+    A -->|tool: send_email| S[📧 SMTP]
+    S --> R[📬 Người nhận]
+    A --> U
+```
+
+- **Naive Bayes**: Multinomial Naive Bayes với Laplace smoothing, tiền xử lý tiếng Việt (bỏ URL, số, ký tự đặc biệt) — viết thuần Python, không dùng thư viện ML có sẵn.
+- **Agent**: vòng lặp *tool calling* của Gemini (LangChain `bind_tools`) với 2 tool `check_spam` và `send_email`.
 
 ---
 
 ## 📁 Cấu trúc thư mục
 
 ```
-spam_classifier/
-│
-├── app.py                  ← Entry point (Streamlit UI)
-├── train.py                ← Script huấn luyện Naive Bayes
-├── config.py               ← Toàn bộ cấu hình tập trung (đọc .env)
+Email-Classifier/
+├── app.py                  ← Giao diện Streamlit (entry point)
+├── train.py                ← Huấn luyện Naive Bayes → models/model.pkl
+├── config.py               ← Cấu hình tập trung (đọc từ .env)
 ├── requirements.txt
 ├── .env.example            ← Mẫu biến môi trường
 │
 ├── core/
-│   ├── __init__.py
-│   ├── naive_bayes.py      ← Thuật toán Naive Bayes (train + predict)
-│   └── llm_classifier.py  ← LangChain pipeline (Gemini)
+│   ├── naive_bayes.py      ← Thuật toán Naive Bayes (train / predict / xác suất)
+│   ├── llm_classifier.py   ← Phân loại bằng Gemini + retry 429
 │   └── email_agent.py      ← AI Agent soạn & gửi email
 │
 ├── utils/
-│   ├── __init__.py
-│   ├── data_loader.py      ← Đọc CSV dataset
-│   └── file_reader.py      ← Đọc .txt / .pdf / .docx (LangChain Loaders)
+│   ├── data_loader.py      ← Đọc dataset CSV
+│   ├── file_reader.py      ← Đọc .txt / .pdf / .docx
 │   └── mailer.py           ← Gửi email qua SMTP
 │
 ├── data/
-│   ├── vi_dataset.csv      ← Dataset chính
+│   ├── vi_dataset.csv      ← Dataset chính (~5.100 tin nhắn)
 │   └── sms_spam_vi.csv     ← Dataset bổ sung
 │
-└── models/
-    └── model.pkl           ← Model đã train (tự sinh sau bước 3)
+└── Ham/, Spam/             ← File mẫu để thử tính năng tải file
 ```
 
 ---
 
-## 🚀 Hướng dẫn chạy từ đầu
+## 🚀 Cài đặt
 
-### Bước 1 — Yêu cầu hệ thống
+### Yêu cầu
+- **Python 3.12+** — kiểm tra bằng `python --version`
+- Git
+- *(Tuỳ chọn)* Google API Key cho Gemini — lấy miễn phí tại https://aistudio.google.com/app/apikey
+- *(Tuỳ chọn)* Tài khoản Gmail để Agent gửi mail
 
-| Công cụ | Phiên bản tối thiểu |
-|---------|---------------------|
-| Python  | 3.11+               |
-| pip     | 23+                 |
-
-> Kiểm tra: `python --version` và `pip --version`
-
----
-
-### Bước 2 — Tải project về máy
+### Bước 1 — Tải project
 
 ```bash
-# Nếu dùng Git
-git clone <repo_url>
-cd spam_classifier
-
-# Hoặc giải nén file ZIP rồi vào thư mục
-cd spam_classifier
+git clone https://github.com/BuiHoangViet/Email-Classifier.git
+cd Email-Classifier
 ```
 
----
+### Bước 2 — Tạo môi trường ảo & cài thư viện
 
-### Bước 3 — Tạo môi trường ảo & cài thư viện
-
-```bash
-# Tạo môi trường ảo (khuyến nghị)
+**Windows (PowerShell)**
+```powershell
 python -m venv .venv
-
-# Kích hoạt
-# Windows:
-.venv\Scripts\activate
-# macOS / Linux:
-source .venv/bin/activate
-
-# Cài thư viện
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
----
+**macOS / Linux**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-### Bước 4 — Cấu hình API Key *(chỉ cần nếu dùng Gemini LLM)*
+> Nếu PowerShell báo lỗi *running scripts is disabled*, chạy một lần:
+> `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
 
-**Cách A — Biến môi trường (khuyến nghị)**
+### Bước 3 — Cấu hình file `.env`
 
 ```bash
+# Windows
+copy .env.example .env
 # macOS / Linux
-export GOOGLE_API_KEY="AIza..."
-
-# Windows (PowerShell)
-$env:GOOGLE_API_KEY="AIza..."
-```
-
-**Cách B — File .env**
-
-```bash
 cp .env.example .env
-# Mở .env và điền key thật vào
 ```
 
-**Cách C — Nhập trực tiếp trên giao diện**
-- Mở sidebar → ô "Google API Key" → dán key vào.
+Mở `.env` và điền:
 
-> 🔑 Lấy key miễn phí tại: https://aistudio.google.com/app/apikey
+```ini
+# Gemini — cần cho engine LLM và Trợ lý Email AI
+GOOGLE_API_KEY=AIza...
 
----
+# SMTP — cần để Agent gửi được email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=ban@gmail.com
+SMTP_PASSWORD=xxxx xxxx xxxx xxxx
+SMTP_SENDER_NAME=Tên của bạn
+```
 
-### Bước 5 — Huấn luyện Naive Bayes model
+> 🔑 **Gmail bắt buộc dùng App Password**, không dùng mật khẩu đăng nhập:
+> bật *Xác minh 2 bước* → tạo tại https://myaccount.google.com/apppasswords
+>
+> ⚠️ Không commit file `.env` lên Git (đã có sẵn trong `.gitignore`).
+
+### Bước 4 — Huấn luyện model Naive Bayes
 
 ```bash
 python train.py
 ```
 
-Kết quả mong đợi:
+Kết quả:
 ```
-[INFO] Đọc dữ liệu : data/vi_dataset.csv
 [INFO] Tổng mẫu   : 4733  (sau lọc từ 5120)
 [INFO] Train / Test: 3313 / 1420
 [INFO] Accuracy    : 94.44%
 [INFO] ✔ Model lưu : models/model.pkl
 ```
 
-> Muốn dùng dataset khác:
-> ```bash
-> python train.py --dataset data/sms_spam_vi.csv
-> ```
+> Dùng dataset khác: `python train.py --dataset data/sms_spam_vi.csv`
+> (Có thể bỏ qua bước này — app có nút **"Huấn luyện ngay"** khi chưa có model.)
 
----
-
-### Bước 6 — Chạy ứng dụng
+### Bước 5 — Chạy ứng dụng
 
 ```bash
 streamlit run app.py
 ```
 
-Trình duyệt tự mở tại **http://localhost:8501**
+Trình duyệt tự mở tại **http://localhost:8501** 🎉
 
 ---
 
-## 🖥️ Hướng dẫn sử dụng giao diện
+## 🖥️ Hướng dẫn sử dụng
 
-1. **Sidebar** → chọn engine: *Naive Bayes* hoặc *Gemini LLM*
-2. **Tab "Nhập tay"** → dán nội dung tin nhắn / email
-3. **Tab "Tải file"** → upload file `.txt`, `.pdf`, hoặc `.docx`
-4. Bấm **🔍 Phân loại**
-5. Xem kết quả: 🚨 SPAM hoặc ✅ HAM
+### Phân loại spam
+1. Sidebar → **Chức năng**: *🔍 Phân loại spam*
+2. Chọn engine: *Naive Bayes* hoặc *Gemini LLM*
+3. Dán nội dung (tab **Nhập tay**) hoặc tải file (tab **Tải file**)
+4. Bấm **🔍 Phân loại** → kết quả 🚨 **SPAM** hoặc ✅ **HAM** kèm xác suất
+
+### Trợ lý Email AI
+1. Sidebar → **Chức năng**: *🤖 Trợ lý Email AI*
+2. Nhắn yêu cầu vào ô chat, ví dụ:
+
+| Bạn nhắn | AI làm gì |
+|---|---|
+| `Soạn mail xin nghỉ phép ngày mai gửi tới sep@congty.com` | Soạn → kiểm tra spam → **gửi luôn** |
+| `Gợi ý tin nhắn xin lỗi khách vì giao hàng trễ` | Chỉ đưa bản nháp, **không gửi** |
+| `Viết lại trang trọng hơn rồi gửi cho cả hr@congty.com` | Sửa bản trước và gửi |
+| `Gửi mail cảm ơn cho anh Nam` | Hỏi lại địa chỉ email (không tự đoán) |
+
+3. Mỗi email hiển thị thành một thẻ: người nhận, tiêu đề, nội dung, kết quả kiểm tra spam, trạng thái ✅ Đã gửi / ❌ Lỗi
+4. Muốn duyệt trước khi gửi → bật **"Xác nhận trước khi gửi"** ở sidebar
 
 ---
 
-## ⚙️ Tuỳ chỉnh nhanh
+## ⚙️ Tuỳ chỉnh
 
-Mở `config.py` để thay đổi:
+Các thông số nằm trong `config.py` (giá trị bí mật đặt trong `.env`):
 
-| Biến | Mô tả |
-|------|-------|
-| `DATASET_PATH` | Đường dẫn file CSV train |
-| `MODEL_PATH` | Nơi lưu model.pkl |
-| `GEMINI_MODEL` | Tên model Gemini (mặc định gemini-2.5-flash, đổi qua .env) |
-| `MAX_WORDS` | Giới hạn số từ mỗi mẫu train |
-| `TEST_SIZE` | Tỷ lệ test khi train (mặc định 0.3) |
+| Biến | Mặc định | Mô tả |
+|---|---|---|
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Model Gemini (đổi được qua `.env`) |
+| `DATASET_PATH` | `data/vi_dataset.csv` | Dataset dùng để train |
+| `TEST_SIZE` | `0.3` | Tỷ lệ tập test |
+| `MAX_WORDS` / `MIN_WORDS` | `200` / `3` | Cắt câu dài / bỏ câu quá ngắn khi train |
+| `AGENT_MAX_STEPS` | `8` | Số bước gọi tool tối đa của Agent |
+| `MAX_RECIPIENTS` | `10` | Số người nhận tối đa mỗi email |
 
 ---
 
 ## 🐛 Lỗi thường gặp
 
-| Lỗi | Nguyên nhân | Cách sửa |
-|-----|-------------|----------|
-| `model.pkl not found` | Chưa train | Chạy `python train.py` |
-| `ModuleNotFoundError` | Chưa cài thư viện | Chạy `pip install -r requirements.txt` |
-| `API key invalid` | Key sai hoặc hết quota | Kiểm tra lại key tại aistudio.google.com |
-| `Streamlit not found` | Chưa kích hoạt venv | Chạy `source .venv/bin/activate` |
+| Lỗi | Cách sửa |
+|---|---|
+| `ModuleNotFoundError` | Kích hoạt venv rồi chạy `pip install -r requirements.txt` |
+| `SyntaxError` ở `naive_bayes.py` | Cần Python **3.12+** |
+| `Chưa tìm thấy models/model.pkl` | Chạy `python train.py` hoặc bấm *Huấn luyện ngay* |
+| `Lỗi 429 / quota` | Chờ ~1 phút, hoặc dùng engine Naive Bayes |
+| `API key not valid` | Kiểm tra `GOOGLE_API_KEY` trong `.env` |
+| `Đăng nhập SMTP thất bại` | Gmail phải dùng **App Password**, kiểm tra `SMTP_USER` / `SMTP_PASSWORD` |
+| Sửa `.env` nhưng không có tác dụng | Tắt app (Ctrl+C) và chạy lại `streamlit run app.py` |
 
 ---
 
-## 🤖 Trợ lý Email AI (AI Agent)
+## 🛠️ Công nghệ
 
-Sidebar → **Chức năng** → *🤖 Trợ lý Email AI*. Chat bằng tiếng Việt, ví dụ:
-
-- `Soạn mail xin nghỉ phép ngày mai gửi tới sep@congty.com` → AI soạn, kiểm tra spam bằng Naive Bayes, rồi **tự gửi**
-- `Gợi ý tin nhắn xin lỗi khách vì giao hàng trễ` → AI chỉ soạn bản nháp, không gửi
-- `Sửa lại ngắn hơn rồi gửi cho cả b@congty.com` → AI dùng ngữ cảnh lượt trước
-
-Bật **"Xác nhận trước khi gửi"** ở sidebar nếu muốn xem/sửa bản nháp và tự bấm **📤 Gửi**.
-
-### Cấu hình gửi mail (file `.env`)
-
-```bash
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587            # 465 = SSL
-SMTP_USER=ban@gmail.com
-SMTP_PASSWORD=xxxx xxxx xxxx xxxx   # Gmail App Password, không phải mật khẩu đăng nhập
-SMTP_SENDER_NAME=Tên của bạn        # dùng để ký cuối thư
-```
-
-Gmail App Password: bật xác minh 2 bước → https://myaccount.google.com/apppasswords
-
-Giới hạn an toàn: tối đa 10 người nhận/lần, AI không tự bịa địa chỉ email, không gửi trùng trong một yêu cầu.
+- **Python 3.12**, **Streamlit** — giao diện web
+- **LangChain** + **Google Gemini** — LLM & AI Agent (tool calling)
+- **Naive Bayes** tự cài đặt — phân loại offline
+- **scikit-learn** (chia train/test), **pandas** (đọc dữ liệu)
+- **smtplib** — gửi email; **python-dotenv** — quản lý cấu hình
