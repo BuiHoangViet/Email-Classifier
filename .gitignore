@@ -1,0 +1,10 @@
+.env
+models/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.streamlit/secrets.toml
+.vscode/
+.claude/
+{core,ui,data,models,utils}/

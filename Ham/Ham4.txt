@@ -1,0 +1,1 @@
+Chào team, hệ thống đang gặp sự cố ở phần tích hợp thanh toán Stripe. Cấu hình kết nối JDBC đang bị timeout liên tục. Vì dự án backend này chúng ta thống nhất build bằng Java và Spring Boot, anh em xem xét lại các dependency xem có bị xung đột phiên bản không nhé.

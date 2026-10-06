@@ -1,0 +1,1 @@
+Anh ơi, em đang chạy thử mô hình LayoutLM cho dự án Document AI để phân loại hợp đồng và bảng lương. Tuy nhiên ở bước tiền xử lý, OCR đang gặp lỗi nhận diện tiếng Việt có dấu. Em tính chuyển thử sang dùng PaddleOCR kết hợp Tesseract, anh thấy hướng này ổn không ạ?
